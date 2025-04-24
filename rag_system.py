@@ -1,20 +1,23 @@
-from transformers import AutoTokenizer, T5ForConditionalGeneration
+from transformers import AutoTokenizer
 from sentence_transformers import SentenceTransformer
+import google.generativeai as genai
 import faiss
 import json
 import os
 import numpy as np
-import torch
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class RAGSystem:
-    def __init__(self, vector_store_dir: str):
-        """Initialize the RAG system with free models"""
+    def __init__(self, vector_store_dir: str, gemini_api_key: str):
+        """Initialize the RAG system with Gemini"""
         # Load the embedding model (already using free SentenceTransformer)
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
-        # Load free LLM from Hugging Face
-        self.tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-base")
-        self.model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-base")
+        # Configure Gemini
+        genai.configure(api_key=gemini_api_key)
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
         
         # Load the vector store
         self.index = faiss.read_index(os.path.join(vector_store_dir, 'faiss_index.bin'))
@@ -23,7 +26,7 @@ class RAGSystem:
             self.texts = data['texts']
             self.metadata = data['metadata']
 
-    def get_relevant_context(self, query: str, k: int = 3) -> list:
+    def get_relevant_context(self, query: str, k: int = 10) -> list:
         """Retrieve relevant context for the query"""
         # Create query embedding
         query_embedding = self.embedding_model.encode([query])[0]
@@ -44,7 +47,7 @@ class RAGSystem:
         return contexts
 
     def generate_response(self, query: str) -> str:
-        """Generate a response using RAG with free models"""
+        """Generate a response using RAG with Gemini"""
         # Get relevant context
         contexts = self.get_relevant_context(query)
         
@@ -61,26 +64,18 @@ class RAGSystem:
 
         Answer:"""
         
-        # Generate response using T5
-        inputs = self.tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
-        outputs = self.model.generate(
-            inputs.input_ids,
-            max_length=512,
-            min_length=50,
-            do_sample=True,  # Enable sampling
-            temperature=0.7,  # Control randomness
-            num_beams=4,
-            no_repeat_ngram_size=2,
-            top_k=50,        # Limit vocabulary choices
-            top_p=0.95       # Nucleus sampling
-        )
-        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return response
+        # Generate response using Gemini
+        response = self.model.generate_content(prompt)
+        return response.text
 
 def main():
     # Initialize the RAG system
     vector_store_dir = "vector_store"
-    rag = RAGSystem(vector_store_dir)
+    gemini_api_key = os.getenv("GEMINI_API_KEY")  # Get API key from environment variable
+    if not gemini_api_key:
+        raise ValueError("Please set the GEMINI_API_KEY environment variable")
+        
+    rag = RAGSystem(vector_store_dir, gemini_api_key)
     
     print("AI Professor RAG System")
     print("Ask me anything about Physics, Biology, or Political Science!")
