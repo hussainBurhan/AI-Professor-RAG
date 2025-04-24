@@ -98,7 +98,6 @@ venv.bak/
 
 # IDEs and editors
 .idea/
-.vscode/
 *.suo
 *.ntvs*
 *.njsproj
@@ -108,3 +107,7 @@ venv.bak/
 # Miscellaneous
 *.log
 local_settings.py
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
